@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Score Table</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<style>
+  :root{
+    --bg:#f1eeea; --card:#fff; --ink:#3a1212; --muted:#7a6a62;
+    --accent:#f9a93b; --line:#e6e0d8; --ok:#2e7d32; --bad:#c62828;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Prompt',sans-serif;background:var(--bg);color:var(--ink);line-height:1.5}
+  .wrap{max-width:900px;margin:0 auto;padding:32px 16px 64px}
+  .head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+  h1{font-size:2rem;margin:0 0 4px}
+  .sub{color:var(--muted);margin:0 0 24px}
+  .lang{display:flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:#fff;flex-shrink:0}
+  .lang button{background:transparent;border-radius:0;padding:6px 14px;font-size:.85rem;color:var(--muted)}
+  .lang button.on{background:var(--ink);color:#fff}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px;margin-bottom:20px}
+  form{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:12px;align-items:end}
+  label{display:block;font-size:.85rem;font-weight:500;margin-bottom:4px}
+  input{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font:inherit;background:#fffdfa}
+  input:focus{outline:2px solid var(--accent);border-color:var(--accent)}
+  button{font:inherit;font-weight:600;border:0;border-radius:10px;padding:10px 18px;cursor:pointer}
+  .btn-add{background:var(--accent);color:var(--ink)}
+  .btn-pdf{background:var(--ink);color:#fff}
+  .btn-pdf:disabled{opacity:.6;cursor:wait}
+  .btn-ghost{background:transparent;border:1px solid var(--line);color:var(--muted)}
+  .btn-del{background:transparent;color:var(--bad);padding:4px 10px}
+  .btn-del:hover{background:#fdecea}
+  .err{color:var(--bad);font-size:.85rem;min-height:1.2em;margin:10px 0 0}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  .stat{background:#faf6f0;border-radius:12px;padding:12px;text-align:center}
+  .stat b{display:block;font-size:1.4rem}
+  .stat span{font-size:.8rem;color:var(--muted)}
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;justify-content:space-between;align-items:center;margin-bottom:14px}
+  .toolbar .left,.toolbar .right{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  select{font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:#fffdfa}
+  table{width:100%;border-collapse:collapse}
+  th,td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--line)}
+  th{background:#faf6f0;font-weight:600;font-size:.9rem}
+  td.num,th.num{text-align:center}
+  .empty{text-align:center;color:var(--muted);padding:28px 0}
+  .score-hi{color:var(--ok);font-weight:600}
+  .score-lo{color:var(--bad);font-weight:600}
+  @media(max-width:700px){
+    form{grid-template-columns:1fr}
+    .stats{grid-template-columns:repeat(2,1fr)}
+    .card{overflow-x:auto}
+    .head{flex-direction:column}
+  }
+
+  /* ตัวห่อสำหรับสร้าง PDF: แสดงทับหน้าจอชั่วคราวตอนส่งออก */
+  #pdf-host{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:#fff;z-index:9999;overflow:auto}
+  #pdf-host.show{display:block}
+  #pdf-area{width:720px;margin:0;background:#fff;color:#000;padding:24px;font-family:'Prompt',sans-serif}
+  #pdf-area h2{margin:0 0 4px;font-size:22px}
+  #pdf-area p{margin:0 0 14px;font-size:12px;color:#444}
+  #pdf-area table{width:100%;border-collapse:collapse;font-size:13px}
+  #pdf-area th,#pdf-area td{border:1px solid #999;padding:6px 10px;text-align:left;background:#fff}
+  #pdf-area th{background:#eee}
+  #pdf-area .c{text-align:center}
+
+  /* สำรอง: พิมพ์ผ่านเบราว์เซอร์ (บันทึกเป็น PDF) */
+  @media print{
+    body{background:#fff}
+    .wrap{display:none}
+    #pdf-host{position:static;display:block !important;height:auto;overflow:visible}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <div>
+      <h1>📊 <span data-i="title"></span></h1>
+      <p class="sub" data-i="subtitle"></p>
+    </div>
+    <div class="lang" role="group" aria-label="Language">
+      <button type="button" id="lang-th">ไทย</button>
+      <button type="button" id="lang-en">EN</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <form id="form" novalidate>
+      <div>
+        <label for="nick" data-i="nick"></label>
+        <input id="nick" type="text" maxlength="30" data-ph="nickPh" required>
+      </div>
+      <div>
+        <label for="sid" data-i="sid"></label>
+        <input id="sid" type="text" inputmode="numeric" maxlength="8" data-ph="sidPh" required>
+      </div>
+      <div>
+        <label for="score" data-i="score"></label>
+        <input id="score" type="number" min="0" max="100" step="any" data-ph="scorePh" required>
+      </div>
+      <button type="submit" class="btn-add" data-i="add"></button>
+    </form>
+    <p class="err" id="err"></p>
+  </div>
+
+  <div class="card stats" id="stats"></div>
+
+  <div class="card">
+    <div class="toolbar">
+      <div class="left">
+        <label for="sort" style="margin:0" data-i="sortBy"></label>
+        <select id="sort">
+          <option value="added" data-i="sAdded"></option>
+          <option value="scoreDesc" data-i="sDesc"></option>
+          <option value="scoreAsc" data-i="sAsc"></option>
+          <option value="id" data-i="sId"></option>
+          <option value="name" data-i="sName"></option>
+        </select>
+      </div>
+      <div class="right">
+        <button type="button" class="btn-ghost" id="clear" data-i="clear"></button>
+        <button type="button" class="btn-pdf" id="pdf"></button>
+      </div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th class="num" style="width:60px" data-i="no"></th>
+          <th data-i="nick"></th>
+          <th data-i="sid"></th>
+          <th class="num" data-i="score"></th>
+          <th style="width:70px"></th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<div id="pdf-host"><div id="pdf-area"></div></div>
+
+<script>
+const T = {
+  th: {
+    docTitle:'ตารางเก็บคะแนน', title:'ตารางเก็บคะแนน',
+    subtitle:'กรอกชื่อเล่น รหัสประจำตัว 8 หลัก และคะแนน (0–100) แล้วส่งออกเป็น PDF ได้',
+    nick:'ชื่อเล่น', sid:'รหัสประจำตัว (8 หลัก)', score:'คะแนน (0–100)',
+    nickPh:'เช่น ฟ้า', sidPh:'เช่น 12345678', scorePh:'เช่น 85',
+    add:'+ เพิ่ม', sortBy:'เรียงตาม',
+    sAdded:'ลำดับที่เพิ่ม', sDesc:'คะแนน มาก → น้อย', sAsc:'คะแนน น้อย → มาก', sId:'รหัสประจำตัว', sName:'ชื่อเล่น',
+    clear:'ล้างทั้งหมด', pdf:'⬇ ส่งออก PDF', pdfBusy:'กำลังสร้าง PDF...',
+    no:'ลำดับ', del:'ลบ', empty:'ยังไม่มีข้อมูล — เริ่มกรอกด้านบนได้เลย',
+    stCount:'จำนวนรายการ', stAvg:'คะแนนเฉลี่ย', stMax:'สูงสุด', stMin:'ต่ำสุด',
+    eNick:'กรุณากรอกชื่อเล่น', eSid:'รหัสประจำตัวต้องเป็นตัวเลข 8 หลักพอดี',
+    eNum:'กรุณากรอกคะแนนเป็นตัวเลข', eRange:'คะแนนต้องอยู่ระหว่าง 0 ถึง 100',
+    eDup:'รหัสประจำตัวนี้มีอยู่ในตารางแล้ว',
+    confirmClear:'ต้องการล้างข้อมูลทั้งหมดใช่หรือไม่?', noData:'ยังไม่มีข้อมูลให้ส่งออก',
+    pdfTitle:'ตารางเก็บคะแนน', pdfDate:'วันที่ส่งออก', pdfItems:'จำนวน', pdfUnit:'รายการ', pdfAvg:'คะแนนเฉลี่ย',
+    pdfFail:'สร้างไฟล์ PDF โดยตรงไม่สำเร็จ จะเปิดหน้าต่างพิมพ์ให้แทน — เลือก "บันทึกเป็น PDF" ในหน้าต่างนั้น',
+    locale:'th-TH', file:'ตารางคะแนน.pdf'
+  },
+  en: {
+    docTitle:'Score Table', title:'Score Table',
+    subtitle:'Enter a nickname, an 8-digit student ID and a score (0–100), then export to PDF.',
+    nick:'Nickname', sid:'Student ID (8 digits)', score:'Score (0–100)',
+    nickPh:'e.g. Fah', sidPh:'e.g. 12345678', scorePh:'e.g. 85',
+    add:'+ Add', sortBy:'Sort by',
+    sAdded:'Order added', sDesc:'Score high → low', sAsc:'Score low → high', sId:'Student ID', sName:'Nickname',
+    clear:'Clear all', pdf:'⬇ Export PDF', pdfBusy:'Creating PDF...',
+    no:'No.', del:'Delete', empty:'No data yet — start entering above.',
+    stCount:'Entries', stAvg:'Average', stMax:'Highest', stMin:'Lowest',
+    eNick:'Please enter a nickname.', eSid:'Student ID must be exactly 8 digits.',
+    eNum:'Please enter the score as a number.', eRange:'Score must be between 0 and 100.',
+    eDup:'This student ID is already in the table.',
+    confirmClear:'Clear all data?', noData:'There is no data to export.',
+    pdfTitle:'Score Table', pdfDate:'Exported on', pdfItems:'Total', pdfUnit:'entries', pdfAvg:'Average score',
+    pdfFail:'Could not create the PDF directly. The print dialog will open instead — choose "Save as PDF".',
+    locale:'en-GB', file:'score-table.pdf'
+  }
+};
+
+const KEY = 'score-table-v1', LKEY = 'score-table-lang';
+let rows = [];
+try { rows = JSON.parse(localStorage.getItem(KEY)) || []; } catch(e){ rows = []; }
+let lang = 'th';
+try { lang = localStorage.getItem(LKEY) || (navigator.language||'').toLowerCase().startsWith('th') ? (localStorage.getItem(LKEY) || 'th') : (localStorage.getItem(LKEY) || 'en'); } catch(e){}
+if(!T[lang]) lang = 'th';
+
+const $ = id => document.getElementById(id);
+const t = k => T[lang][k];
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(rows)); } catch(e){} };
+const esc = s => s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt = n => Number.isInteger(n) ? String(n) : String(+n.toFixed(2));
+
+function applyLang(){
+  document.documentElement.lang = lang;
+  document.title = t('docTitle');
+  document.querySelectorAll('[data-i]').forEach(el => el.textContent = t(el.dataset.i));
+  document.querySelectorAll('[data-ph]').forEach(el => el.placeholder = t(el.dataset.ph));
+  if(!$('pdf').disabled) $('pdf').textContent = t('pdf');
+  $('lang-th').classList.toggle('on', lang==='th');
+  $('lang-en').classList.toggle('on', lang==='en');
+  $('err').textContent = '';
+  render();
+}
+function setLang(l){ lang = l; try{ localStorage.setItem(LKEY,l); }catch(e){} applyLang(); }
+$('lang-th').onclick = () => setLang('th');
+$('lang-en').onclick = () => setLang('en');
+
+$('sid').addEventListener('input', e => { e.target.value = e.target.value.replace(/\D/g,'').slice(0,8); });
+
+function sorted(){
+  const list = rows.map((r,i)=>({...r, idx:i}));
+  switch($('sort').value){
+    case 'scoreDesc': list.sort((a,b)=>b.score-a.score); break;
+    case 'scoreAsc':  list.sort((a,b)=>a.score-b.score); break;
+    case 'id':        list.sort((a,b)=>a.sid.localeCompare(b.sid)); break;
+    case 'name':      list.sort((a,b)=>a.nick.localeCompare(b.nick,lang)); break;
+  }
+  return list;
+}
+
+function render(){
+  const list = sorted();
+  $('tbody').innerHTML = list.length ? list.map((r,i)=>`
+    <tr>
+      <td class="num">${i+1}</td>
+      <td>${esc(r.nick)}</td>
+      <td>${r.sid}</td>
+      <td class="num ${r.score>=50?'score-hi':'score-lo'}">${fmt(r.score)}</td>
+      <td><button type="button" class="btn-del" data-i="${r.idx}">${t('del')}</button></td>
+    </tr>`).join('') : `<tr><td colspan="5" class="empty">${t('empty')}</td></tr>`;
+
+  const sc = rows.map(r=>r.score);
+  const avg = sc.length ? sc.reduce((a,b)=>a+b,0)/sc.length : 0;
+  $('stats').innerHTML = `
+    <div class="stat"><b>${rows.length}</b><span>${t('stCount')}</span></div>
+    <div class="stat"><b>${sc.length?fmt(avg):'-'}</b><span>${t('stAvg')}</span></div>
+    <div class="stat"><b>${sc.length?fmt(Math.max(...sc)):'-'}</b><span>${t('stMax')}</span></div>
+    <div class="stat"><b>${sc.length?fmt(Math.min(...sc)):'-'}</b><span>${t('stMin')}</span></div>`;
+}
+
+$('form').addEventListener('submit', e => {
+  e.preventDefault();
+  const nick = $('nick').value.trim();
+  const sid = $('sid').value.trim();
+  const raw = $('score').value.trim();
+  const score = Number(raw);
+  let msg = '';
+  if(!nick) msg = t('eNick');
+  else if(!/^\d{8}$/.test(sid)) msg = t('eSid');
+  else if(raw==='' || isNaN(score)) msg = t('eNum');
+  else if(score<0 || score>100) msg = t('eRange');
+  else if(rows.some(r=>r.sid===sid)) msg = t('eDup');
+  $('err').textContent = msg;
+  if(msg) return;
+  rows.push({nick, sid, score});
+  save(); render();
+  $('form').reset();
+  $('nick').focus();
+});
+
+$('tbody').addEventListener('click', e => {
+  const b = e.target.closest('.btn-del'); if(!b) return;
+  rows.splice(+b.dataset.i,1); save(); render();
+});
+$('clear').addEventListener('click', () => {
+  if(rows.length && confirm(t('confirmClear'))){ rows=[]; save(); render(); }
+});
+$('sort').addEventListener('change', render);
+
+/* ---------- ส่งออก PDF ---------- */
+function buildPdfHtml(){
+  const list = sorted();
+  const avg = rows.reduce((a,r)=>a+r.score,0)/rows.length;
+  const today = new Date().toLocaleDateString(t('locale'),{year:'numeric',month:'long',day:'numeric'});
+  $('pdf-area').innerHTML = `
+    <h2>${t('pdfTitle')}</h2>
+    <p>${t('pdfDate')}: ${today} | ${t('pdfItems')} ${rows.length} ${t('pdfUnit')} | ${t('pdfAvg')} ${fmt(avg)}</p>
+    <table>
+      <thead><tr>
+        <th class="c" style="width:55px">${t('no')}</th><th>${t('nick')}</th>
+        <th>${t('sid').replace(/\s*\(.*\)/,'')}</th><th class="c">${t('score').replace(/\s*\(.*\)/,'')}</th>
+      </tr></thead>
+      <tbody>${list.map((r,i)=>`<tr><td class="c">${i+1}</td><td>${esc(r.nick)}</td><td>${r.sid}</td><td class="c">${fmt(r.score)}</td></tr>`).join('')}</tbody>
+    </table>`;
+}
+
+function printFallback(){
+  $('pdf-host').classList.add('show');
+  const done = () => { $('pdf-host').classList.remove('show'); window.removeEventListener('afterprint', done); };
+  window.addEventListener('afterprint', done);
+  setTimeout(() => window.print(), 100);
+}
+
+$('pdf').addEventListener('click', async () => {
+  if(!rows.length){ alert(t('noData')); return; }
+  const btn = $('pdf');
+  btn.disabled = true; btn.textContent = t('pdfBusy');
+  buildPdfHtml();
+  const host = $('pdf-host');
+  host.classList.add('show');
+  host.scrollTop = 0;
+  try{
+    if(typeof html2pdf === 'undefined') throw new Error('html2pdf not loaded');
+    try{ await Promise.all([document.fonts.load('400 14px Prompt'), document.fonts.load('600 14px Prompt')]); await document.fonts.ready; }catch(e){}
+    await new Promise(r => setTimeout(r, 150));
+    await html2pdf().set({
+      margin: 10,
+      filename: t('file'),
+      image: {type:'jpeg', quality:0.98},
+      html2canvas: {scale:2, useCORS:true, backgroundColor:'#ffffff', scrollX:0, scrollY:0, windowWidth:document.documentElement.clientWidth},
+      jsPDF: {unit:'mm', format:'a4', orientation:'portrait'},
+      pagebreak: {mode:['css','legacy'], avoid:'tr'}
+    }).from($('pdf-area')).save();
+    host.classList.remove('show');
+  }catch(err){
+    console.error(err);
+    host.classList.remove('show');
+    alert(t('pdfFail'));
+    printFallback();
+  }finally{
+    btn.disabled = false; btn.textContent = t('pdf');
+  }
+});
+
+applyLang();
+</script>
+</body>
+</html>
